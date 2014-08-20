@@ -1,3 +1,4 @@
+#include <geany.h>
 #include <geanyplugin.h>
 
 GeanyPlugin *geany_plugin;

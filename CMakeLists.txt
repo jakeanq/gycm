@@ -12,13 +12,21 @@ include_directories(
 	${GEANY_INCLUDE_DIRS}
 )
 
-add_library(gycm
+add_library(gycm SHARED
 	gycm.cpp
 )
 
 target_link_libraries(gycm
 	${GEANY_LIBRARIES}
 )
+
+set_target_properties(gycm PROPERTIES PREFIX "")
+
+string(REGEX REPLACE ";" " " GEANY_CFLAGS_OTHER "${GEANY_CFLAGS_OTHER}") # Not really sure how/why semicolons got into the output...
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GEANY_CFLAGS_OTHER}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${GEANY_CFLAGS_OTHER}")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${GEANY_LDFLAGS_OTHER}")
 
 if(MSVC)
         if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
@@ -28,13 +36,14 @@ if(MSVC)
         endif()
 elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR
                 CMAKE_CXX_COMPILER MATCHES "clang")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -O2 --std=c++11")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -std=c99 -O2") 
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -O2 --std=c++11 -Wno-ignored-attributes")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -std=c99 -O2 -Wno-ignored-attributes") 
         string(REGEX REPLACE " -g " " -ggdb " CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 else()
-        MESSAGE("Probably shouldn't be here; what compiler are you using?")
+        message("Probably shouldn't be here; what compiler are you using?")
 endif()
 
 if(CMAKE_CXX_COMPILER MATCHES "clang")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcolor-diagnostics")
 endif()
+
