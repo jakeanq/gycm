@@ -1,16 +1,22 @@
 #include <geany.h>
 #include <geanyplugin.h>
-
+#include "ycmd.hpp"
 GeanyPlugin *geany_plugin;
 GeanyData *geany_data;
 GeanyFunctions *geany_functions;
 
 PLUGIN_VERSION_CHECK(217); /* May be overly high */
 
-PLUGIN_SET_INFO("GYCM", "YouCompleteMe smart code completion for Geany", "0.1", "Jake Bott <jake.anq\064gmail.com>");
+PLUGIN_SET_INFO("GYCM", "YouCompleteMe smart code completion for Geany", "0.1", "Jake Bott <jake.anq\100gmail.com>");
 
-extern "C" void plugin_init(GeanyData* _data){
+Ycmd * y;
+
+extern "C" void plugin_init(GeanyData*){
+	y = new Ycmd(geany,geany_functions);
+	y->startServer();
 }
 
 extern "C" void plugin_cleanup(void) {
+	y->shutdown();
+	delete y;
 }
