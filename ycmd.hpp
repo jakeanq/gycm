@@ -5,6 +5,7 @@
 #include <json/json.h>
 #include <string>
 #include "utils.hpp"
+#include <neon/ne_session.h>
 
 #define HMAC_SECRET_LENGTH 16
 
@@ -15,9 +16,14 @@ public:
 	bool startServer();
 	bool isAlive();
 	void shutdown();
+	void complete(GeanyDocument*);
+	bool assertServer();
+	bool restart();
+	int handler(const char *, size_t);
 private:
-	void loadSettings();
-	void createStashGroup();
+	gchar * b64HexHMAC(std::string& data);
+	void jsonRequestBuild(GeanyDocument*, std::string&);
+	void send(std::string&,std::string=std::string("/completions"));
 	GeanyData* geany;
 	GeanyFunctions* geany_functions;
 	char hmac[HMAC_SECRET_LENGTH];
@@ -25,6 +31,9 @@ private:
 	pid_t pid;
 	int port;
 	int getFreePort();
+	ne_session * http;
+	bool running;
+	std::vector<char> returned_data;
 };
 
 #endif

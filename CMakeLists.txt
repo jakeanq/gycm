@@ -10,6 +10,7 @@ include(FindPkgConfig)
 pkg_search_module(GEANY REQUIRED geany)
 find_package(Neon REQUIRED) # HTTP client
 find_package(JsonCpp REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 include_directories(
 	${GEANY_INCLUDE_DIRS}
@@ -46,8 +47,7 @@ if(MSVC)
         else()
                 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
         endif()
-elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR
-                CMAKE_CXX_COMPILER MATCHES "clang")
+elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER MATCHES "clang")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -O2 --std=c++11 -Wno-ignored-attributes -Wno-missing-field-initializers")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -std=c99 -O2 -Wno-ignored-attributes -Wno-missing-field-initializers") 
         string(REGEX REPLACE " -g " " -ggdb " CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")

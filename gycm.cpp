@@ -14,6 +14,10 @@ Ycmd * y;
 extern "C" void plugin_init(GeanyData*){
 	y = new Ycmd(geany,geany_functions);
 	y->startServer();
+	guint i;
+	foreach_document(i){
+		y->complete(documents[i]);
+	}
 }
 
 extern "C" void plugin_cleanup(void) {
