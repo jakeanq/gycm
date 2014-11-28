@@ -143,8 +143,8 @@ void Ycmd::jsonRequestBuild(GeanyDocument * _g, std::string& result){
 	ScintillaObject * sci = _g->editor->sci;
 	std::string fpath = _g->real_path?std::string(_g->real_path):"";
 	Json::Value request;
-	request["line_num"] = sci_get_current_line(sci);
-	request["column_num"] = sci_get_col_from_position(sci,sci_get_current_position(sci)) + 1;
+	request["line_num"] = sci_get_current_line(sci) + 1;
+	request["column_num"] = sci_get_col_from_position(sci,sci_get_current_position(sci));
 	request["filepath"] = fpath;
 	request["file_data"][fpath]["filetypes"][0] = std::string(_g->file_type->name);
 	gchar * document = sci_get_contents(sci,sci_get_length(sci));
@@ -169,7 +169,7 @@ int Ycmd::handler(const char * buf, size_t len){
 		printf("%c",returned_data[i]);
 	}
 	printf("\n\n");
-	return 0; // Success!
+	return len; // Success! // was 0
 }
 #define HMAC_LENGTH (256/8)
 gchar * Ycmd::b64HexHMAC(std::string& data)
