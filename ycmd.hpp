@@ -30,7 +30,6 @@ private:
 	int ycmd_stderr_fd, ycmd_stdout_fd;
 	pid_t pid;
 	int port;
-	int getFreePort();
 	ne_session * http;
 	bool running;
 	std::vector<char> returned_data;

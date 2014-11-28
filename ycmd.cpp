@@ -5,9 +5,6 @@
 #include <fstream>
 #include <sstream>
 #include <cstring>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <errno.h>
 #include <neon/ne_socket.h>
 #include <openssl/hmac.h>
@@ -27,32 +24,7 @@ Ycmd::Ycmd(GeanyData* _gd, GeanyFunctions* _gf) : geany(_gd), geany_functions(_g
 Ycmd::~Ycmd(){
 	ne_sock_exit();
 }
-int Ycmd::getFreePort(){
-	int sockfd;
-	sockfd = socket(AF_INET,SOCK_STREAM,0);
-	if(sockfd < 0){
-		return -1;
-	}
-	struct sockaddr_in serv_addr;
-	memset(&serv_addr,0,sizeof(struct sockaddr_in));
-	
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = 0;
-	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	
-	if (bind(sockfd,(struct sockaddr *) &serv_addr,sizeof(struct sockaddr_in)) < 0){
-		return -1;
-	}
-	if(listen(sockfd,1) == -1) {
-		return -1;
-	}
-	socklen_t len = sizeof(struct sockaddr_in);
-	if(getsockname(sockfd, (struct sockaddr *) &serv_addr, &len) < 0){
-		return -1;
-	}
-	close(sockfd);
-	return ntohs(serv_addr.sin_port);
-}
+
 bool Ycmd::startServer(){
 	if(running)
 		return true;
