@@ -8,13 +8,13 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FindPkgConfig)
 
 pkg_search_module(GEANY REQUIRED geany)
-find_package(Neon REQUIRED) # HTTP client
+find_package(Poco REQUIRED Net) # HTTP client
 find_package(JsonCpp REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 include_directories(
 	${GEANY_INCLUDE_DIRS}
-	${NEON_INCLUDE_DIRS}
+	${Poco_INCLUDE_DIRS}
 	${OPENSSL_INCLUDE_DIRS}
 	${JSONCPP_INCLUDE_DIRS}
 )
@@ -28,7 +28,7 @@ message(${GEANY_LIBRARIES})
 
 target_link_libraries(gycm
 	${GEANY_LIBRARIES}
-	${NEON_LIBRARIES}
+	${Poco_LIBRARIES}
 	${OPENSSL_LIBRARIES}
 	${JSONCPP_LIBRARIES}
 )

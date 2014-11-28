@@ -8,4 +8,6 @@ std::string confPath(GeanyData*,std::string);
 
 std::string slurp(std::string);
 
+int getFreePort();
+
 #endif

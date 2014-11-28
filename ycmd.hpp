@@ -5,7 +5,9 @@
 #include <json/json.h>
 #include <string>
 #include "utils.hpp"
-#include <neon/ne_session.h>
+#include <Poco/Net/HTTPClientSession.h>
+#include <Poco/Process.h>
+//#include <neon/ne_session.h>
 
 #define HMAC_SECRET_LENGTH 16
 
@@ -30,8 +32,7 @@ private:
 	int ycmd_stderr_fd, ycmd_stdout_fd;
 	pid_t pid;
 	int port;
-	int getFreePort();
-	ne_session * http;
+	Poco::Net::HTTPClientSession * http;
 	bool running;
 	std::vector<char> returned_data;
 };

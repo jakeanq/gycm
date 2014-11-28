@@ -5,59 +5,33 @@
 #include <fstream>
 #include <sstream>
 #include <cstring>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <errno.h>
-#include <neon/ne_socket.h>
+//#include <neon/ne_socket.h>
 #include <openssl/hmac.h>
-#include <neon/ne_request.h>
+//#include <neon/ne_request.h>
 #include <unistd.h>
+
 
 Ycmd::Ycmd(GeanyData* _gd, GeanyFunctions* _gf) : geany(_gd), geany_functions(_gf), running(false) {
 	// Generate HMAC secret
 	for(size_t i=0; i<HMAC_SECRET_LENGTH; i++)
 		hmac[i] = (char) (rand() % 256);
-	
-	if(ne_sock_init() != 0){
-		msgwin_status_add("Neon initialization failed! This is very bad.");
-	}
+	gchar* hmac64 = g_base64_encode((guchar*) hmac,HMAC_SECRET_LENGTH);
 }
 
 Ycmd::~Ycmd(){
-	ne_sock_exit();
+	g_free(hmac64);
 }
-int Ycmd::getFreePort(){
-	int sockfd;
-	sockfd = socket(AF_INET,SOCK_STREAM,0);
-	if(sockfd < 0){
-		return -1;
-	}
-	struct sockaddr_in serv_addr;
-	memset(&serv_addr,0,sizeof(struct sockaddr_in));
-	
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = 0;
-	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	
-	if (bind(sockfd,(struct sockaddr *) &serv_addr,sizeof(struct sockaddr_in)) < 0){
-		return -1;
-	}
-	if(listen(sockfd,1) == -1) {
-		return -1;
-	}
-	socklen_t len = sizeof(struct sockaddr_in);
-	if(getsockname(sockfd, (struct sockaddr *) &serv_addr, &len) < 0){
-		return -1;
-	}
-	close(sockfd);
-	return ntohs(serv_addr.sin_port);
-}
+
 bool Ycmd::startServer(){
-	if(running)
+	// Check if running already
+	if(isAlive())
 		return true;
+	
+	// Grab the settings file
 	Json::Value ycmdsettings;
 	Json::Reader doc;
+	// TODO: Improve
 	std::string cf = confPath(geany,"ycmd.json");
 	std::ifstream conf(cf.c_str());
 	if(!conf.good()){
@@ -68,18 +42,19 @@ bool Ycmd::startServer(){
 		msgwin_status_add("ycmd startup failed: %s", doc.getFormattedErrorMessages().c_str());
 		return false;
 	}
-	gchar* hmac64 = g_base64_encode((guchar*) hmac,HMAC_SECRET_LENGTH);
+	// END TODO
+	
+	// Add the HMAC to the settings
 	//printf("HMAC Secret: %s\n",hmac64);
 	ycmdsettings["hmac_secret"] = std::string(hmac64);
-	g_free(hmac64);
-	
-	const gchar* _tmpdir = g_get_tmp_dir();
-	std::string tempdir(_tmpdir);
-	gchar* tmpfname = g_build_filename(tempdir.c_str(),"ycmdXXXXXX",NULL);
-	
 	std::string jsonout = Json::FastWriter().write(ycmdsettings);
 	
+	// Create a temp file to use for passing the settings to ycmd
+	//const gchar* _tmpdir = g_get_tmp_dir();
+	std::string tempdir(g_get_tmp_dir());
+	gchar* tmpfname = g_build_filename(tempdir.c_str(),"ycmdXXXXXX",NULL);
 	int fd = mkstemp(tmpfname);
+	
 	if(fd == -1){
 		msgwin_status_add("ycmd startup failed: Could not write config: %s (mkstemp)", strerror(errno));
 		return false;
@@ -94,16 +69,16 @@ bool Ycmd::startServer(){
 		return false;
 	}
 	
-	
-	
+	// Decide on a port to use
 	port = getFreePort();
 	if(port == -1){
 		msgwin_status_add("ycmd startup failed: Could not get free port: %s", strerror(errno));
 		return false;
 	}
 	
+	// Compile ycmd arguments
 	gchar* cwd = g_get_current_dir();
-	gchar py[] = "python";
+	gchar py[] = "python"; // TODO: Figure out if this is reliable; it probably isn't
 	gchar iss[] = "--idle_suicide_seconds=10800";
 	gchar * args[6] = { py, NULL, NULL, NULL, iss, NULL }; /* python; ycmd path; port, config; iss */
 	// Port:
@@ -117,9 +92,11 @@ bool Ycmd::startServer(){
 	// ycmd path
 	args[1] = g_build_filename(ycmdsettings["ycmd_path"].asString().c_str(),"ycmd",NULL);
 	
+	// Launch ycmd!
 	GError * err = NULL;
 	bool ret = g_spawn_async_with_pipes(cwd,args,NULL,G_SPAWN_SEARCH_PATH,NULL,NULL,&pid,NULL,&ycmd_stdout_fd, &ycmd_stderr_fd,&err);
 	
+	// Cleanup
 	fclose(temp);
 	delete[] args[2];
 	delete[] args[3];
@@ -139,8 +116,8 @@ bool Ycmd::startServer(){
 		return false;
 	}
 	
-	http = ne_session_create("http", "127.0.0.1", port);
-	sleep(1);
+	http.connect(Poco::Net::SocketAddress("127.0.0.1", port));
+	sleep(1); // TODO: Actually check if server is ready
 	running = true;
 	return true;
 }
@@ -154,9 +131,10 @@ void Ycmd::shutdown(){
 		return;
 	msgwin_status_add("Shutting down ycmd");
 	running = false;
-	kill(pid,SIGTERM);
-	ne_close_connection(http);
-	ne_session_destroy(http);
+	if(kill(pid,SIGTERM)==0)
+		msgwin_status_add("ycmd shut down successfully");
+	else
+		msgwin_status_add("oops, ycmd was already shut down!");
 }
 
 void Ycmd::complete(GeanyDocument* _g){
@@ -218,8 +196,8 @@ gchar * Ycmd::b64HexHMAC(std::string& data)
 }
 
 void Ycmd::send(std::string& json, std::string _handler){
-	ne_request* req = ne_request_create(http,"POST",_handler.c_str());
-	ne_add_request_header(req,"content-type","application/json");
+	Poco::HTTPRequest req("POST",_handler);
+	req.setContentType("application/json");
 	
 	gchar * digest_enc = b64HexHMAC(json);
 //	printf("HMAC: %s\n", digest_enc);
