@@ -25,11 +25,17 @@ public:
 	void complete(GeanyDocument*);
 	bool assertServer();
 	bool restart();
+	// Neon rcv handler
 	int handler(const char *, size_t);
+	
+	// Geany signal handlers
+	void handleDocumentLoad(GObject*, GeanyDocument*);
+	void handleDocumentUnload(GObject*, GeanyDocument*);
 private:
 	gchar * b64HexHMAC(std::string& data);
-	void jsonRequestBuild(GeanyDocument*, std::string&);
-	void send(std::string&,std::string);
+	void jsonRequestBuild(GeanyDocument*, Json::Value&, Json::Value&);
+	void jsonRequestBuild(GeanyDocument*, Json::Value&);
+	void send(Json::Value&,std::string);
 	GeanyData* geany;
 	GeanyFunctions* geany_functions;
 	char hmac[HMAC_SECRET_LENGTH];

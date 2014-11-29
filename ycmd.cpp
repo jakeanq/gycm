@@ -133,16 +133,25 @@ void Ycmd::shutdown(){
 void Ycmd::complete(GeanyDocument* _g){
 	if(sci_get_length(_g->editor->sci) == 0) return;
 	assertServer();
-	std::string json;
-	jsonRequestBuild(_g,json);
+	Json::Value json;
+	Json::Value extrad;
+	extrad["event_name"] = "FileReadyToParse";
+	jsonRequestBuild(_g,json,extrad);
 	send(json,EVENT_HANDLER);
 	send(json,CODE_COMPLETIONS_HANDLER);
 }
 
-void Ycmd::jsonRequestBuild(GeanyDocument * _g, std::string& result){
+void Ycmd::jsonRequestBuild(GeanyDocument * _g, Json::Value& request, Json::Value& extra_data){
+	jsonRequestBuild(_g,request);
+	Json::Value::Members x = extra_data.getMemberNames();
+	for(auto it = x.begin(); it != x.end(); it++)
+		request[*it] = extra_data[*it];
+}
+
+void Ycmd::jsonRequestBuild(GeanyDocument * _g, Json::Value& request){
 	ScintillaObject * sci = _g->editor->sci;
 	std::string fpath = _g->real_path?std::string(_g->real_path):"";
-	Json::Value request;
+	//Json::Value request;
 	request["line_num"] = sci_get_current_line(sci) + 1;
 	request["column_num"] = sci_get_col_from_position(sci,sci_get_current_position(sci)) + 1;
 	request["filepath"] = fpath;
@@ -150,11 +159,8 @@ void Ycmd::jsonRequestBuild(GeanyDocument * _g, std::string& result){
 	//gchar * document = sci_get_contents(sci,sci_get_length(sci));
 	//request["file_data"][fpath]["contents"] = std::string(document);
 	request["file_data"] = getUnsavedBuffers();
-	request["event_name"] = "FileReadyToParse";
 	
 	std::cout << "Built request: " << Json::StyledWriter().write(request); // Debug! :D
-	
-	result = Json::FastWriter().write(request);
 }
 int block_reader(void * userdata, const char * buf, size_t len){
 	return ((Ycmd*)userdata)->handler(buf,len);
@@ -216,9 +222,11 @@ gchar * Ycmd::b64HexHMAC(std::string& data)
 	return ret;
 }
 
-void Ycmd::send(std::string& json, std::string _handler){
+void Ycmd::send(Json::Value& _json, std::string _handler){
 	ne_request* req = ne_request_create(http,"POST",_handler.c_str());
 	ne_add_request_header(req,"content-type","application/json");
+	
+	std::string json = Json::FastWriter().write(_json);
 	
 	gchar * digest_enc = b64HexHMAC(json);
 //	printf("HMAC: %s\n", digest_enc);
@@ -262,4 +270,22 @@ Json::Value Ycmd::getUnsavedBuffers(){
 		g_free(document);
 	}
 	return v;
+}
+
+void Ycmd::handleDocumentLoad(GObject*, GeanyDocument* doc){
+	Json::Value json;
+	Json::Value extrad;
+	extrad["event_name"] = "FileReadyToParse";
+	jsonRequestBuild(doc,json,extrad);
+	send(json,EVENT_HANDLER);
+}
+
+void Ycmd::handleDocumentUnload(GObject*, GeanyDocument* doc){
+	Json::Value json;
+	Json::Value extrad;
+	extrad["event_name"] = "BufferUnload";
+	std::string fpath = doc->real_path?std::string(doc->real_path):"";
+	extrad["unloaded_buffer"] = fpath;
+	jsonRequestBuild(doc,json,extrad);
+	send(json,EVENT_HANDLER);
 }

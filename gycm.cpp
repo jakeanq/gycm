@@ -16,7 +16,7 @@ extern "C" void plugin_init(GeanyData*){
 	y->startServer();
 	guint i;
 	foreach_document(i){
-		y->complete(documents[i]);
+		y->handleDocumentLoad(NULL,documents[i]);
 		break;
 	}
 }
@@ -25,3 +25,14 @@ extern "C" void plugin_cleanup(void) {
 	y->shutdown();
 	delete y;
 }
+
+extern "C" void handle_document_load(GObject *obj, GeanyDocument *doc, gpointer user_data){
+	((Ycmd*)user_data)->handleDocumentLoad(obj,doc);
+}
+
+PluginCallback plugin_callbacks[] =
+{
+	{ "document-open",   (GCallback) &handle_document_load, TRUE, y },
+	{ "document-reload", (GCallback) &handle_document_load, TRUE, y },
+	{ NULL, NULL, FALSE, NULL }
+};
