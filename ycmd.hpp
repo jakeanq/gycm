@@ -32,7 +32,9 @@ private:
 	int port;
 	ne_session * http;
 	bool running;
-	std::vector<char> returned_data;
+	std::string returned_data;
+	Json::Reader doc;
+	Json::Value getUnsavedBuffers();
 };
 
 #endif

@@ -29,7 +29,6 @@ bool Ycmd::startServer(){
 	if(running)
 		return true;
 	Json::Value ycmdsettings;
-	Json::Reader doc;
 	std::string cf = confPath(geany,"ycmd.json");
 	std::ifstream conf(cf.c_str());
 	if(!conf.good()){
@@ -144,12 +143,15 @@ void Ycmd::jsonRequestBuild(GeanyDocument * _g, std::string& result){
 	std::string fpath = _g->real_path?std::string(_g->real_path):"";
 	Json::Value request;
 	request["line_num"] = sci_get_current_line(sci) + 1;
-	request["column_num"] = sci_get_col_from_position(sci,sci_get_current_position(sci));
+	request["column_num"] = sci_get_col_from_position(sci,sci_get_current_position(sci)) + 1;
 	request["filepath"] = fpath;
-	request["file_data"][fpath]["filetypes"][0] = std::string(_g->file_type->name);
-	gchar * document = sci_get_contents(sci,sci_get_length(sci));
-	request["file_data"][fpath]["contents"] = std::string(document);
-	std::cout << Json::StyledWriter().write(request);
+	//request["file_data"][fpath]["filetypes"][0] = strToLower(_g->file_type->name);
+	//gchar * document = sci_get_contents(sci,sci_get_length(sci));
+	//request["file_data"][fpath]["contents"] = std::string(document);
+	request["file_data"] = getUnsavedBuffers();
+	
+	std::cout << "Built request: " << Json::StyledWriter().write(request); // Debug! :D
+	
 	result = Json::FastWriter().write(request);
 }
 int block_reader(void * userdata, const char * buf, size_t len){
@@ -165,11 +167,34 @@ int Ycmd::handler(const char * buf, size_t len){
 	}
 	// We have a complete set of data
 	
-	for(size_t i=0; i<returned_data.size(); i++){
-		printf("%c",returned_data[i]);
+	//for(size_t i=0; i<returned_data.size(); i++){
+	//	printf("%c",returned_data[i]);
+	//}
+	//printf("\n\n");
+	
+	//std::cout << "Handling response: " << returned_data;
+	
+	Json::Value returned;
+	if(!doc.parse(returned_data,returned)){
+		msgwin_status_add("Bad JSON from ycmd: %s", doc.getFormattedErrorMessages().c_str());
+		returned_data = "";
+		return 0;
 	}
-	printf("\n\n");
-	return len; // Success! // was 0
+	
+	returned_data = "";
+	
+	if(returned.isMember("exception")){
+		msgwin_status_add("[ycmd] %s: %s", returned["exception"]["TYPE"].asCString(), returned["message"].asCString());
+		#ifndef NDEBUG
+		std::cout << returned.toStyledString();
+		#endif
+		return 0;
+	}
+	
+	std::cout << returned.toStyledString();
+	
+	
+	return 0; // Success! // was 0
 }
 #define HMAC_LENGTH (256/8)
 gchar * Ycmd::b64HexHMAC(std::string& data)
@@ -214,4 +239,25 @@ bool Ycmd::assertServer(){
 bool Ycmd::restart(){
 	shutdown();
 	return startServer();
+}
+
+Json::Value Ycmd::getUnsavedBuffers(){
+	guint i;
+	Json::Value v;
+	gchar * document;
+	ScintillaObject * sci;
+	std::string fpath;
+	
+	foreach_document(i){
+		if(!documents[i]->changed)
+			continue;
+		fpath = documents[i]->real_path?std::string(documents[i]->real_path):"";
+		
+		sci = documents[i]->editor->sci;
+		v[fpath]["filetypes"][0] = strToLower(documents[i]->file_type->name);
+		document = sci_get_contents(sci,sci_get_length(sci));
+		v[fpath]["contents"] = std::string(document);
+		g_free(document);
+	}
+	return v;
 }

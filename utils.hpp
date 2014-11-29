@@ -10,4 +10,5 @@ std::string slurp(std::string);
 
 int getFreePort();
 
+std::string strToLower(std::string);
 #endif

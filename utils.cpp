@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <cstring>
+#include <algorithm>
 
 std::string confPath(GeanyData* geany, std::string name){
 	char * t = g_build_filename(geany->app->configdir, "plugins", "gycm", name.c_str(), NULL);
@@ -62,4 +63,9 @@ int getFreePort(){
 	}
 	close(sockfd);
 	return ntohs(serv_addr.sin_port);
+}
+
+std::string strToLower(std::string s){
+	std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+	return s;
 }

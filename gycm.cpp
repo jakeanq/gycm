@@ -17,6 +17,7 @@ extern "C" void plugin_init(GeanyData*){
 	guint i;
 	foreach_document(i){
 		y->complete(documents[i]);
+		break;
 	}
 }
 
