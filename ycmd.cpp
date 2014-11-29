@@ -76,7 +76,7 @@ bool Ycmd::startServer(){
 	gchar* cwd = g_get_current_dir();
 	gchar py[] = "python";
 	gchar iss[] = "--idle_suicide_seconds=10800";
-	gchar * args[6] = { py, NULL, NULL, NULL, iss, NULL }; /* python; ycmd path; port, config; iss */
+	gchar * args[6] = { py, NULL, NULL, NULL, iss, NULL }; /* python; ycmd path; port, config; iss */ // TODO: Add log-level option
 	// Port:
 	std::stringstream _port; _port << "--port=" << port;
 	args[2] = new char[_port.str().length()];
@@ -135,7 +135,8 @@ void Ycmd::complete(GeanyDocument* _g){
 	assertServer();
 	std::string json;
 	jsonRequestBuild(_g,json);
-	send(json);
+	send(json,EVENT_HANDLER);
+	send(json,CODE_COMPLETIONS_HANDLER);
 }
 
 void Ycmd::jsonRequestBuild(GeanyDocument * _g, std::string& result){
@@ -149,6 +150,7 @@ void Ycmd::jsonRequestBuild(GeanyDocument * _g, std::string& result){
 	//gchar * document = sci_get_contents(sci,sci_get_length(sci));
 	//request["file_data"][fpath]["contents"] = std::string(document);
 	request["file_data"] = getUnsavedBuffers();
+	request["event_name"] = "FileReadyToParse";
 	
 	std::cout << "Built request: " << Json::StyledWriter().write(request); // Debug! :D
 	
@@ -158,7 +160,7 @@ int block_reader(void * userdata, const char * buf, size_t len){
 	return ((Ycmd*)userdata)->handler(buf,len);
 }
 
-int Ycmd::handler(const char * buf, size_t len){
+int Ycmd::handler(const char * buf, size_t len){ // TODO: Validate HMAC
 	if(len != 0){
 		size_t start = returned_data.size();
 		returned_data.resize(start + len);

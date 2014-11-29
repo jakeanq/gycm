@@ -9,6 +9,12 @@
 
 #define HMAC_SECRET_LENGTH 16
 
+#define DEFINED_SUBCOMMANDS_HANDLER "/defined_subcommands"
+#define CODE_COMPLETIONS_HANDLER "/completions"
+#define COMPLETER_COMMANDS_HANDLER "/run_completer_command"
+#define EVENT_HANDLER "/event_notification"
+#define EXTRA_CONF_HANDLER "/load_extra_conf_file"
+
 class Ycmd {
 public:
 	Ycmd(GeanyData*,GeanyFunctions*);
@@ -23,7 +29,7 @@ public:
 private:
 	gchar * b64HexHMAC(std::string& data);
 	void jsonRequestBuild(GeanyDocument*, std::string&);
-	void send(std::string&,std::string=std::string("/completions"));
+	void send(std::string&,std::string);
 	GeanyData* geany;
 	GeanyFunctions* geany_functions;
 	char hmac[HMAC_SECRET_LENGTH];
