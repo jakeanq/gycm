@@ -8,5 +8,5 @@ Currently kind of operational and very unstable.
 See Also
 --------
 
-- [ycmd website](https://github.com/jakeanq/gycm/new/master?readme=1)
-- [YouCompleteMe] - The original plugin for vim
+- [ycmd website](https://github.com/Valloric/ycmd)
+- [YouCompleteMe](https://github.com/Valloric/YouCompleteMe) - The original plugin for vim
