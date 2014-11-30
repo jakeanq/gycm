@@ -11,6 +11,8 @@
 #include <neon/ne_request.h>
 #include <unistd.h>
 
+#define SSM(s, m, w, l) scintilla_send_message(s, m, w, l)
+
 Ycmd::Ycmd(GeanyData* _gd, GeanyFunctions* _gf) : geany(_gd), geany_functions(_gf), running(false) {
 	// Generate HMAC secret
 	for(size_t i=0; i<HMAC_SECRET_LENGTH; i++)
@@ -130,17 +132,6 @@ void Ycmd::shutdown(){
 	ne_session_destroy(http);
 }
 
-void Ycmd::complete(GeanyDocument* _g){
-	if(sci_get_length(_g->editor->sci) == 0) return;
-	assertServer();
-	Json::Value json;
-	Json::Value extrad;
-	extrad["event_name"] = "FileReadyToParse";
-	jsonRequestBuild(_g,json,extrad);
-	send(json,EVENT_HANDLER);
-	send(json,CODE_COMPLETIONS_HANDLER);
-}
-
 void Ycmd::jsonRequestBuild(GeanyDocument * _g, Json::Value& request, Json::Value& extra_data){
 	jsonRequestBuild(_g,request);
 	Json::Value::Members x = extra_data.getMemberNames();
@@ -158,9 +149,11 @@ void Ycmd::jsonRequestBuild(GeanyDocument * _g, Json::Value& request){
 	//request["file_data"][fpath]["filetypes"][0] = strToLower(_g->file_type->name);
 	//gchar * document = sci_get_contents(sci,sci_get_length(sci));
 	//request["file_data"][fpath]["contents"] = std::string(document);
-	request["file_data"] = getUnsavedBuffers();
+	request["file_data"] = getUnsavedBuffers(_g);
 	
-	std::cout << "Built request: " << Json::StyledWriter().write(request); // Debug! :D
+	currentEditor = sci;
+	
+	//std::cout << "Built request: " << Json::StyledWriter().write(request); // Debug! :D
 }
 int block_reader(void * userdata, const char * buf, size_t len){
 	return ((Ycmd*)userdata)->handler(buf,len);
@@ -191,6 +184,9 @@ int Ycmd::handler(const char * buf, size_t len){ // TODO: Validate HMAC
 	
 	returned_data = "";
 	
+	if(returned.isNull()) // Some things just return an empty document; this is of no use to us
+		return 0;
+	
 	if(returned.isMember("exception")){
 		msgwin_status_add("[ycmd] %s: %s", returned["exception"]["TYPE"].asCString(), returned["message"].asCString());
 		#ifndef NDEBUG
@@ -199,8 +195,32 @@ int Ycmd::handler(const char * buf, size_t len){ // TODO: Validate HMAC
 		return 0;
 	}
 	
-	std::cout << returned.toStyledString();
+	//std::cout << returned.toStyledString();
 	
+	// Handle completions
+	if(returned.isMember("completion_start_column")){
+		Json::Value * v;
+		if(returned.isMember("completions") && (v = &returned["completions"])->isArray() && v->size() >= 1){ // We need to display a list!
+			printf("Got here!\n");
+			int lenEntered = currentMessage["column_num"].asInt() - returned["completion_start_column"].asInt(); // Geany uses 0-index for columns
+			printf("l: %i, len: %zi\n",lenEntered,v->size());
+			std::string s;
+			for(size_t i=0; i<(v->size()-1); i++){
+				try {
+					s += ((*v)[Json::ArrayIndex(i)]["insertion_text"].asString() + "\n");
+				} catch(std::exception &e) {
+					std::cout << e.what() << std::endl;
+				}
+				printf("i: %zu\n",i);
+			}
+			s += (*v)[v->size()-1]["insertion_text"].asString();
+			printf("s: %s\n",s.c_str());
+			SSM(currentEditor,SCI_AUTOCSHOW,lenEntered,(sptr_t) s.c_str());
+		} else { // Nothing completable
+			SSM(currentEditor,SCI_AUTOCCANCEL,0,0); // Cancel any current completions
+		}
+	}
+			
 	
 	return 0; // Success! // was 0
 }
@@ -223,16 +243,19 @@ gchar * Ycmd::b64HexHMAC(std::string& data)
 }
 
 void Ycmd::send(Json::Value& _json, std::string _handler){
+	assertServer(); // A good idea?
 	ne_request* req = ne_request_create(http,"POST",_handler.c_str());
 	ne_add_request_header(req,"content-type","application/json");
+	
+	currentMessage = _json;
 	
 	std::string json = Json::FastWriter().write(_json);
 	
 	gchar * digest_enc = b64HexHMAC(json);
-//	printf("HMAC: %s\n", digest_enc);
+	//printf("HMAC: %s\n", digest_enc);
 	ne_add_request_header(req,"X-Ycm-Hmac",digest_enc);
 	g_free(digest_enc);
-	std::ofstream s("temp.file"); s << json; s.close();
+	//std::ofstream s("temp.file"); s << json; s.close();
 	ne_set_request_body_buffer(req,json.c_str(),json.length());
 	ne_add_response_body_reader(req,ne_accept_always,block_reader,this);
 	if(ne_request_dispatch(req)){
@@ -251,7 +274,7 @@ bool Ycmd::restart(){
 	return startServer();
 }
 
-Json::Value Ycmd::getUnsavedBuffers(){
+Json::Value Ycmd::getUnsavedBuffers(GeanyDocument* doc){
 	guint i;
 	Json::Value v;
 	gchar * document;
@@ -259,7 +282,7 @@ Json::Value Ycmd::getUnsavedBuffers(){
 	std::string fpath;
 	
 	foreach_document(i){
-		if(!documents[i]->changed)
+		if(!documents[i]->changed && documents[i] != doc)
 			continue;
 		fpath = documents[i]->real_path?std::string(documents[i]->real_path):"";
 		
@@ -269,10 +292,13 @@ Json::Value Ycmd::getUnsavedBuffers(){
 		v[fpath]["contents"] = std::string(document);
 		g_free(document);
 	}
+	if(v.isNull())
+		v = Json::Value(Json::objectValue);
 	return v;
 }
 
 void Ycmd::handleDocumentLoad(GObject*, GeanyDocument* doc){
+	SSM(doc->editor->sci,SCI_AUTOCSETORDER,SC_ORDER_CUSTOM,0);
 	Json::Value json;
 	Json::Value extrad;
 	extrad["event_name"] = "FileReadyToParse";
@@ -288,4 +314,22 @@ void Ycmd::handleDocumentUnload(GObject*, GeanyDocument* doc){
 	extrad["unloaded_buffer"] = fpath;
 	jsonRequestBuild(doc,json,extrad);
 	send(json,EVENT_HANDLER);
+}
+
+void Ycmd::handleDocumentVisit(GObject*, GeanyDocument* doc){
+	if(!doc)
+		return;
+	Json::Value json;
+	Json::Value extrad;
+	extrad["event_name"] = "BufferVisit";
+	jsonRequestBuild(doc,json,extrad);
+	send(json,EVENT_HANDLER);
+}
+
+void Ycmd::complete(GObject*,GeanyDocument* doc){
+	if(sci_get_length(doc->editor->sci) == 0) return; // Empty document, move along
+	
+	Json::Value json;
+	jsonRequestBuild(doc,json); // Basic request is all we need, I think
+	send(json,CODE_COMPLETIONS_HANDLER);
 }

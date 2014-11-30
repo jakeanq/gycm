@@ -22,7 +22,6 @@ public:
 	bool startServer();
 	bool isAlive();
 	void shutdown();
-	void complete(GeanyDocument*);
 	bool assertServer();
 	bool restart();
 	// Neon rcv handler
@@ -31,6 +30,8 @@ public:
 	// Geany signal handlers
 	void handleDocumentLoad(GObject*, GeanyDocument*);
 	void handleDocumentUnload(GObject*, GeanyDocument*);
+	void handleDocumentVisit(GObject*, GeanyDocument*);
+	void complete(GObject*,GeanyDocument*);
 private:
 	gchar * b64HexHMAC(std::string& data);
 	void jsonRequestBuild(GeanyDocument*, Json::Value&, Json::Value&);
@@ -46,7 +47,9 @@ private:
 	bool running;
 	std::string returned_data;
 	Json::Reader doc;
-	Json::Value getUnsavedBuffers();
+	Json::Value getUnsavedBuffers(GeanyDocument*);
+	Json::Value currentMessage;
+	ScintillaObject * currentEditor;
 };
 
 #endif
