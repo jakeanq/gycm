@@ -30,6 +30,7 @@ Ycmd::~Ycmd(){
 bool Ycmd::startServer(){
 	if(running)
 		return true;
+	pid = 0;
 	Json::Value ycmdsettings;
 	std::string cf = confPath(geany,"ycmd.json");
 	std::ifstream conf(cf.c_str());
@@ -79,16 +80,25 @@ bool Ycmd::startServer(){
 	gchar py[] = "python";
 	gchar iss[] = "--idle_suicide_seconds=10800";
 	gchar * args[6] = { py, NULL, NULL, NULL, iss, NULL }; /* python; ycmd path; port, config; iss */ // TODO: Add log-level option
+	// ycmd path
+	char * expanded_path = realpath(ycmdsettings["ycmd_path"].asString().c_str(),NULL);
+	if(!expanded_path){
+		msgwin_status_add("'%s': %s",ycmdsettings["ycmd_path"].asString().c_str(),strerror(errno));
+		free(expanded_path);
+		return false;
+	}
+	args[1] = g_build_filename(expanded_path,"ycmd",NULL);
+	free(expanded_path);
+	
 	// Port:
 	std::stringstream _port; _port << "--port=" << port;
 	args[2] = new char[_port.str().length()];
 	strcpy(args[2],_port.str().c_str());
+	
 	// Options
 	std::string optf = "--options_file=" + std::string(tmpfname);
 	args[3] = new char[optf.length()];
 	strcpy(args[3],optf.c_str());
-	// ycmd path
-	args[1] = g_build_filename(ycmdsettings["ycmd_path"].asString().c_str(),"ycmd",NULL);
 	
 	GError * err = NULL;
 	bool ret = g_spawn_async_with_pipes(cwd,args,NULL,G_SPAWN_SEARCH_PATH,NULL,NULL,&pid,NULL,&ycmd_stdout_fd, &ycmd_stderr_fd,&err);
@@ -105,6 +115,7 @@ bool Ycmd::startServer(){
 		g_error_free(err);
 		return false;
 	}
+	sleep(1);
 	if(isAlive()){
 		msgwin_status_add("ycmd started successfully");
 	} else {
@@ -113,13 +124,12 @@ bool Ycmd::startServer(){
 	}
 	
 	http = ne_session_create("http", "127.0.0.1", port);
-	sleep(1);
 	running = true;
 	return true;
 }
 
 bool Ycmd::isAlive(){
-	return kill(pid,0) == 0;
+	return pid != 0 && kill(pid,0) == 0;
 }
 
 void Ycmd::shutdown(){
@@ -127,9 +137,10 @@ void Ycmd::shutdown(){
 		return;
 	msgwin_status_add("Shutting down ycmd");
 	running = false;
-	kill(pid,SIGTERM);
 	ne_close_connection(http);
 	ne_session_destroy(http);
+	if(kill(pid,SIGTERM) != 0)
+		msgwin_status_add("ycmd vanished! [%s]", strerror(errno));
 }
 
 void Ycmd::jsonRequestBuild(GeanyDocument * _g, Json::Value& request, Json::Value& extra_data){
@@ -201,9 +212,9 @@ int Ycmd::handler(const char * buf, size_t len){ // TODO: Validate HMAC
 	if(returned.isMember("completion_start_column")){
 		Json::Value * v;
 		if(returned.isMember("completions") && (v = &returned["completions"])->isArray() && v->size() >= 1){ // We need to display a list!
-			printf("Got here!\n");
+			//printf("Got here!\n");
 			int lenEntered = currentMessage["column_num"].asInt() - returned["completion_start_column"].asInt(); // Geany uses 0-index for columns
-			printf("l: %i, len: %zi\n",lenEntered,v->size());
+			//printf("l: %i, len: %zi\n",lenEntered,v->size());
 			std::string s;
 			for(size_t i=0; i<(v->size()-1); i++){
 				try {
@@ -211,10 +222,10 @@ int Ycmd::handler(const char * buf, size_t len){ // TODO: Validate HMAC
 				} catch(std::exception &e) {
 					std::cout << e.what() << std::endl;
 				}
-				printf("i: %zu\n",i);
+				//printf("i: %zu\n",i);
 			}
 			s += (*v)[v->size()-1]["insertion_text"].asString();
-			printf("s: %s\n",s.c_str());
+			//printf("s: %s\n",s.c_str());
 			SSM(currentEditor,SCI_AUTOCSHOW,lenEntered,(sptr_t) s.c_str());
 		} else { // Nothing completable
 			SSM(currentEditor,SCI_AUTOCCANCEL,0,0); // Cancel any current completions
@@ -243,7 +254,7 @@ gchar * Ycmd::b64HexHMAC(std::string& data)
 }
 
 void Ycmd::send(Json::Value& _json, std::string _handler){
-	assertServer(); // A good idea?
+	if(!assertServer()) return; // A good idea?
 	ne_request* req = ne_request_create(http,"POST",_handler.c_str());
 	ne_add_request_header(req,"content-type","application/json");
 	
@@ -289,7 +300,7 @@ Json::Value Ycmd::getUnsavedBuffers(GeanyDocument* doc){
 		sci = documents[i]->editor->sci;
 		v[fpath]["filetypes"][0] = strToLower(documents[i]->file_type->name);
 		document = sci_get_contents(sci,sci_get_length(sci));
-		v[fpath]["contents"] = std::string(document);
+		v[fpath]["contents"] = document?std::string(document):"";
 		g_free(document);
 	}
 	if(v.isNull())
