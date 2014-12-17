@@ -10,6 +10,8 @@
 #include <openssl/hmac.h>
 #include <neon/ne_request.h>
 #include <unistd.h>
+#include <glib/gstdio.h>
+#include "config.hpp"
 
 #define SSM(s, m, w, l) scintilla_send_message(s, m, w, l)
 
@@ -32,15 +34,38 @@ bool Ycmd::startServer(){
 		return true;
 	pid = 0;
 	Json::Value ycmdsettings;
+	bool hasConf = true;
 	std::string cf = confPath(geany,"ycmd.json");
-	std::ifstream conf(cf.c_str());
-	if(!conf.good()){
-		msgwin_status_add("ycmd startup failed: Error opening file %s", cf.c_str());
-		return false;
+	if(!fileExists(cf)){
+		char * t2 = g_get_current_dir();
+		char * t3 = g_build_filename(t2,"ycmd.json", NULL);
+		if(fileExists(t3)){
+			cf = t3;
+		} else {
+			hasConf = false;
+		}
+		free(t2);
+		free(t3);
 	}
-	if(!doc.parse(conf,ycmdsettings)){
-		msgwin_status_add("ycmd startup failed: %s", doc.getFormattedErrorMessages().c_str());
-		return false;
+	if(hasConf){
+		std::ifstream conf(cf.c_str());
+		if(!conf.good()){
+			msgwin_status_add("ycmd startup failed: Error opening file %s", cf.c_str());
+			return false;
+		}
+		if(!doc.parse(conf,ycmdsettings)){
+			msgwin_status_add("ycmd startup failed: %s", doc.getFormattedErrorMessages().c_str());
+			return false;
+		}
+	} else {
+		ycmdsettings = defaultConfig();
+		Json::StyledWriter w;
+		char * t = g_path_get_dirname(cf.c_str());
+		g_mkdir(t,0777);
+		g_free(t);
+		std::ofstream f(cf);
+		f << w.write(ycmdsettings);
+		f.close();
 	}
 	gchar* hmac64 = g_base64_encode((guchar*) hmac,HMAC_SECRET_LENGTH);
 	//printf("HMAC Secret: %s\n",hmac64);

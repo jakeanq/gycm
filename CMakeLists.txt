@@ -23,6 +23,7 @@ add_library(gycm SHARED
 	gycm.cpp
 	ycmd.cpp
 	utils.cpp
+	config.cpp
 )
 message(${GEANY_LIBRARIES})
 

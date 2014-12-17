@@ -9,17 +9,13 @@ std::string confPath(GeanyData* geany, std::string name){
 	char * t = g_build_filename(geany->app->configdir, "plugins", "gycm", name.c_str(), NULL);
 	
 	std::string x(t);
-	if(access(t, F_OK ) == -1){
-		char * t2 = g_get_current_dir();
-		char * t3 = g_build_filename(t2,name.c_str(), NULL);
-		x = t3;
-		free(t2);
-		free(t3);
-	}
-		
 	g_free(t);
 	
 	return x;
+}
+
+bool fileExists(std::string name){
+	return access(name.c_str(), F_OK) != -1;
 }
 
 std::string slurp(std::string fname){
