@@ -260,34 +260,27 @@ int Ycmd::handler(const char * buf, size_t len){ // TODO: Validate HMAC
 	
 	return 0; // Success! // was 0
 }
+
 #define HMAC_LENGTH (256/8)
-gchar * Ycmd::b64HexHMAC(std::string& data)
-{
-	unsigned char * digest = HMAC(EVP_sha256(), hmac, HMAC_SECRET_LENGTH,(unsigned char *) data.c_str(),data.length(), NULL, NULL);
-	
-	char hex_str[]= "0123456789abcdef";
-	unsigned char * digest_enc = new unsigned char[HMAC_LENGTH*2];
-
-	for (int i = 0; i < HMAC_LENGTH; i++){
-		digest_enc[i * 2 + 0] = hex_str[digest[i] >> 4  ];
-		digest_enc[i * 2 + 1] = hex_str[digest[i] & 0x0F];
-	}
-	//free(digest); No idea why this isn't needed
-	gchar * ret = g_base64_encode(digest_enc,HMAC_LENGTH*2);
-	delete[] digest_enc;
-	return ret;
-}
-
 void Ycmd::send(Json::Value& _json, std::string _handler){
 	if(!assertServer()) return; // A good idea?
-	ne_request* req = ne_request_create(http,"POST",_handler.c_str());
+        std::string method("POST");
+        ne_request* req = ne_request_create(http,method.c_str(),_handler.c_str());
 	ne_add_request_header(req,"content-type","application/json");
 	
 	currentMessage = _json;
 	
 	std::string json = Json::FastWriter().write(_json);
 	
-	gchar * digest_enc = b64HexHMAC(json);
+        unsigned char join[HMAC_LENGTH*3];
+        HMAC(EVP_sha256(), hmac, HMAC_SECRET_LENGTH,(unsigned char *) method.c_str(),method.length(), join, NULL);
+        HMAC(EVP_sha256(), hmac, HMAC_SECRET_LENGTH,(unsigned char *) _handler.c_str(),_handler.length(), join+HMAC_LENGTH, NULL);
+        HMAC(EVP_sha256(), hmac, HMAC_SECRET_LENGTH,(unsigned char *) json.c_str(),json.length(), join+2*HMAC_LENGTH, NULL);
+
+        unsigned char * digest_join = HMAC(EVP_sha256(), hmac, HMAC_SECRET_LENGTH,(unsigned char *) join,HMAC_LENGTH*3, NULL, NULL);
+
+        gchar * digest_enc = g_base64_encode(digest_join, HMAC_LENGTH);
+
 	//printf("HMAC: %s\n", digest_enc);
 	ne_add_request_header(req,"X-Ycm-Hmac",digest_enc);
 	g_free(digest_enc);
